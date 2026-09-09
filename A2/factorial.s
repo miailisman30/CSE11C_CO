@@ -9,7 +9,7 @@ factorial:
     pushq %rbp
     movq %rsp, %rbp
 
-    movq $1, %rax
+    # redundant movq $1, %rax
 
  # this solution is with a for loop
  
