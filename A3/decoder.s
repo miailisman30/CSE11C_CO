@@ -1,6 +1,9 @@
+.data
+fmt: .asciz "%c"
+
 .text
 
-.include "helloWorld.s"
+.include "final.s"
 
 .global main
 
@@ -22,7 +25,53 @@ decode:
 
 	# your code goes here
 
+    pushq %rbx
+    pushq %r12
+    pushq %r13
+    subq $8, %rsp          # 16-byte allignment needed
+    
+    movq $0, %rdi
+    leaq MESSAGE, %rsi
+
+    main_loop:
+        leaq MESSAGE, %rsi
+        leaq  (%rsi, %rdi, 8), %r8
+        movl 2(%r8), %ebx  # 4 bytes to find next block (value)
+        movzbl 1(%r8), %r12d 
+        movb (%r8), %r13b
+        
+        inner_loop:
+            cmpq $0, %r12
+            jle inner_end
+            
+            movq $0, %rax
+            movq $fmt, %rdi
+            movl %r13d, %esi
+            call printf
+
+            decq %r12
+            jmp inner_loop
+
+        inner_end:
+        
+        
+        cmpq $0, %rbx
+        jle end
+
+        movl %ebx, %edi
+        jmp main_loop
+        
+    end:
+    
+
+        
+
 	# epilogue
+    addq $8, %rsp
+    popq %r13
+    popq %r12
+    popq %rbx
+
 	movq	%rbp, %rsp		# clear local variables from stack
 	popq	%rbp			# restore base pointer location 
 	ret
@@ -37,5 +86,4 @@ main:
 	popq	%rbp			# restore base pointer location 
 	movq	$0, %rdi		# load program exit code
 	call	exit			# exit the program
-
 
