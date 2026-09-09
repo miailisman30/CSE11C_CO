@@ -1,0 +1,36 @@
+
+
+/*
+ * The decode subroutine decodes the messages.
+ *
+ * Arguments:
+ *
+ * address - the address of the message
+ * memory
+ *
+ * Return value: none
+ */
+void decode(int address) { // address: rdi
+    int current = address; // rsi - actual address where we at
+    int next // rdx - this is the offset from address
+    int times // amount of times to print -> use ch and split register with char (no more rcx)
+    int char // the character to print -> use cl
+
+    do {
+        next = 2(current)
+        times = 1(current)
+        char = 0(current)
+        # 2 1 0 instead of 2 6 7 because little endian encoding
+        # which is stupid btw because its little endian on a per block basis and not little endian on the whole block
+        # just give a binary dump holyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy
+
+        while (times>0) {
+            times--
+            append_to_buff(char)
+        }
+        
+        current = address+8*next
+    } while (current != B) // B = 00000000
+
+    printf(buff)
+}
