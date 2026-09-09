@@ -21,7 +21,7 @@ void decode(int address) { // address: rdi
         times = 1(current)
         char = 0(current)
         # 2 1 0 instead of 2 6 7 because little endian encoding
-        # which is stupid btw because its little endian on a per block basis and not little endian on the whole block
+        # which is stupid btw because its little endian on a per block basis and not little endian on the whole data
         # just give a binary dump holyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy
 
         while (times>0) {
