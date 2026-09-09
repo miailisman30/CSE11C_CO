@@ -15,7 +15,7 @@ power:
         cmpq $0, %rsi
         jle end
     
-        imul %rdi, %rax
+        imulq %rdi, %rax
         decq %rsi
         jmp loop
 
