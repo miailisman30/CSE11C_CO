@@ -31,11 +31,11 @@ decode:
     subq $8, %rsp          # 16-byte allignment needed
     
     movq $0, %rdi
-    leaq MESSAGE, %rsi
+    movq $MESSAGE, %rsi
 
     main_loop:
-        leaq MESSAGE, %rsi
-        leaq  (%rsi, %rdi, 8), %r8
+        movq $MESSAGE, %rsi
+        leaq (%rsi, %rdi, 8), %r8
         movl 2(%r8), %ebx  # 4 bytes to find next block (value)
         movzbl 1(%r8), %r12d 
         movb (%r8), %r13b
