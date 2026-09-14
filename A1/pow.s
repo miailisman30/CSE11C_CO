@@ -13,7 +13,7 @@ power:
     movq $1, %rax
     loop: 
         cmpq $0, %rsi
-        jle end
+        jle endia
     
         imulq %rdi, %rax
         decq %rsi
