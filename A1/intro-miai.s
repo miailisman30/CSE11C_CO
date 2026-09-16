@@ -11,7 +11,7 @@ fmt3: .asciz "The result: %ld \n"
 base: .quad 0
 exp: .quad 0
 .section .rodata
-fmt: .asciz "Name: %s, NetID: %s \n Name: %s, NetID: %s \n"
+fmt4: .asciz "Name: %s, NetID: %s \n Name: %s, NetID: %s \n"
 
 .text
 
