@@ -1,5 +1,8 @@
-.data
-fmt: .asciz "%c"
+.section .bss
+.global DECODED
+DECODED:
+    .space 2048
+
 
 .text
 
@@ -25,53 +28,49 @@ decode:
 
 	# your code goes here
 
-    pushq %rbx
-    pushq %r12
-    pushq %r13
-    subq $8, %rsp          # 16-byte allignment needed
-    
-    movq $0, %rdi          # our current block number
-    movq $MESSAGE, %rsi
+    movq $DECODED, %r8  # set DECODED index to 0
+    movq %rdi, %rsi     # current address is rsi
+    m_block:            # do this for each block
 
-    main_loop:
-        movq $MESSAGE, %rsi
-        leaq (%rsi, %rdi, 8), %r8    # current full memory block value => have to rdi*8 + rsi(block number * 8 + message address)
-        movl 2(%r8), %ebx            # 4 bytes to find next block (value)
-        movzbl 1(%r8), %r12d         # find how many times we print
-        movb (%r8), %r13b            # find letter
+
+        movl 2(%rsi), %edx # next (as offset from original address)
+        movb 1(%rsi), %ch  # times to print
+        movb 0(%rsi), %cl  # char to print
+
+
         
-        inner_loop:
-            cmpq $0, %r12
-            jle inner_end
+        print_l: # print ch times
+            cmpb $0, %ch
+            jle e_print_l
+
+            # append to buffer
+            movb %cl, (%r8) # use parenthesis so you dont move into register but at the address the register holds!!!!
+            incq %r8
+
+            decb %ch        # decrement loop
             
-            movq $0, %rax
-            movq $fmt, %rdi
-            movl %r13d, %esi
-            call printf
-
-            decq %r12
-            jmp inner_loop
-
-        inner_end:
+            jmp print_l
+        e_print_l:
         
-        
-        cmpq $0, %rbx
-        jle end
+        # exit loop if arrived on block 0 again
+        cmpl $0, %edx  
+        je e_m_block
 
-        movl %ebx, %edi
-        jmp main_loop
+        # go to next block
+        shlq $3, %rdx   # multiply next by 8
+        addq %rdi, %rdx # add the original address
+        movq %rdx, %rsi # assign to current block indexer
         
-    end:
-    
+        jmp m_block
+    e_m_block:
+    movb $0, (%r8) # ensure termination char
 
-        
+    # print the decoded string
+    movq $DECODED, %rdi
+    movq $0, %rax
+    call printf
 
 	# epilogue
-    addq $8, %rsp
-    popq %r13
-    popq %r12
-    popq %rbx
-
 	movq	%rbp, %rsp		# clear local variables from stack
 	popq	%rbp			# restore base pointer location 
 	ret
@@ -86,4 +85,5 @@ main:
 	popq	%rbp			# restore base pointer location 
 	movq	$0, %rdi		# load program exit code
 	call	exit			# exit the program
+
 

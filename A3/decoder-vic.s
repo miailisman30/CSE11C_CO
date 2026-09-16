@@ -1,7 +1,7 @@
 .section .bss
 .global DECODED
 DECODED:
-    .space 2048
+    .space 8048
 
 
 .text
@@ -32,9 +32,26 @@ decode:
     movq %rdi, %rsi     # current address is rsi
     m_block:            # do this for each block
 
+
+        movb 7(%rsi), %r12b
+        movb 6(%rsi), %r11b
         movl 2(%rsi), %edx # next (as offset from original address)
         movb 1(%rsi), %ch  # times to print
         movb 0(%rsi), %cl  # char to print
+
+        movb $91, (%r8)
+        incq %r8
+        movb $27, (%r8)
+        incq %r8
+        movb %r11b, (%r8)
+        incq %r8
+
+        movb $91, (%r8)
+        incq %r8
+        movb $27, (%r8)
+        incq %r8
+        movb %r12b, (%r8)
+        incq %r8
 
         print_l: # print ch times
             cmpb $0, %ch
