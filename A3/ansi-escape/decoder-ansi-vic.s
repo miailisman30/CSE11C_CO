@@ -7,8 +7,8 @@ fmt_csi: .asciz "\x1B[38;5;%d;48;5;%dm"
 .include "final.s"
 .global main
 
-foreground = 7
-background = 6
+foreground = 6
+background = 7
 next_block = 2
 print_times = 1
 character = 0
