@@ -1,5 +1,5 @@
 
-.section .rodata
+.data
 fmt_decoded: .asciz "%s"
 fmt_csi: .asciz "\x1B[38;5;%d;48;5;%dm"
 fmt_eff_csi: .asciz "\x1B[%dm"
