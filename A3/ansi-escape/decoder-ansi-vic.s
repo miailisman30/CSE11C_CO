@@ -37,8 +37,8 @@ decode:
 
     lblock:
 # arguments for sprintf to add ansi escape sequence
-        movq background(%r14), %rcx     # parameter %d 2: background
-        movq foreground(%r14), %rdx     # parameter %d 1: foreground
+        movzbq background(%r14), %rcx     # parameter %d 2: background
+        movzbq foreground(%r14), %rdx     # parameter %d 1: foreground
         movq $fmt_csi, %rsi             # fmt string
         movq %r13, %rdi                 # current buffer pointer
         
@@ -56,7 +56,7 @@ decode:
 
 # print character
             movzbq character(%r14), %rdx
-            movq %rdx, (%r13)                # write to buffer
+            movb %dl, (%r13)                # write to buffer
             incq %r13                       # increment buffer pointer
 
 
