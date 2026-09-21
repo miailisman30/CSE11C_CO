@@ -1,7 +1,7 @@
 
 .section .rodata
 fmt_decoded: .asciz "%s"
-fmt_csi: .asciz "\x1B[38;5;%d;48;5;%dm%s"
+fmt_csi: .asciz "\x1B[38;5;%d;48;5;%dm"
 
 .text
 .include "final.s"
@@ -17,18 +17,43 @@ message = -8
 decode:
     pushq %rbp
     movq %rsp, %rbp
-
-    subq $8, %rsp   # align
-    pushq %rdi      # send message argument to stack
-# allocate heap memory for decoded message
-    movq $32768, %rdi
-    call malloc
-# %RAX is heap buffer
-
-    l_block:
-        movq %r8, %rdi
     
+# save callee saved registers
+    pushq %r12
+    pushq %r13
+    pushq %r14
 
+    movq $0, %r12       # decoded buffer pointer
+    movq $0, %r13       # block offset
+    movq %rdi, %r14     # encoded message address
+
+
+# allocate heap memory for decoded message
+    subq $8, %rsp       # align
+    movq $32768, %rdi   # amount to request
+    call malloc         # %RAX is heap buffer now
+    # addq $8, %rsp       # dealign
+
+
+   
+    l_block:
+# arguments for sprintf to add ansi escape sequence
+        movq background(%), %rcx    # parameter %d 2: background
+        movq foreground(%rbp), %rdx # parameter %d 1: foreground
+        movq $fmt_csi, %rsi         # fmt string
+        movq %r8, %rdi              # current buffer pointer
+        
+        call sprintf
+
+
+
+
+
+# return callee saved registers
+    popq %r14
+    popq %r13
+    popq %r12
+    
     movq %rbp, %rsp
     popq %rbp
     ret
