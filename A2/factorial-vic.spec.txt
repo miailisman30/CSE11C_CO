@@ -1,0 +1,25 @@
+
+
+/**
+ * The factorial subroutine is the wrapper around the recursive
+ * _factorial function
+ * The _factorial funciton is the actual function which 
+ * calculates the factorial.
+ *
+ * Arguments factorial:
+ *      number - the number to calculate the factorial of
+ *
+ * Arguments _factorial:
+ *      nf - the number to calculate
+ *      n1 - accumulator for result
+ *      nc - number to multiply accumulator by
+ *
+ * Return value: 'number'!
+
+ int _factorial(int nf, n1, nc) {
+    if (n1 == nf) return n1; # puts into %rax and all functions clear their stack frame
+    n1 = n1*nc;
+    return _factorial(nf, n1, nc+1);
+ }
+
+

@@ -1,7 +1,13 @@
 .section .bss
 .global DECODED
 DECODED:
-    .space 8048
+    .space 50048
+
+.section .rodata
+fmt:
+    .asciz "%s"
+num_fmt:
+    .asciz "%d"
 
 
 .text
@@ -39,19 +45,41 @@ decode:
         movb 1(%rsi), %ch  # times to print
         movb 0(%rsi), %cl  # char to print
 
-        movb $91, (%r8)
+        movb $27, (%r8)      
         incq %r8
-        movb $27, (%r8)
+        movb $'[', (%r8)     
         incq %r8
-        movb %r11b, (%r8)
+        movb $'3', (%r8)     
+        incq %r8
+        movb $'8', (%r8)    
+        incq %r8
+        movb $';', (%r8)   
+        incq %r8
+        movb $'5', (%r8)      
+        incq %r8
+        movb $';', (%r8)     
+        incq %r8
+        
+        movq %r8, %rdi
+        movq $num_fmt, %rsi
+        movq %r11, %rdx
+        movq $0, %rax
+        call sprintf
+        addq %rax, %r8
+
+
+        # movb $'5', (%r8)
+        # incq %r8
+
+        movb $'m', (%r8)
         incq %r8
 
-        movb $91, (%r8)
-        incq %r8
-        movb $27, (%r8)
-        incq %r8
-        movb %r12b, (%r8)
-        incq %r8
+        # movb $59,(%r8)
+        # incq %r8
+        # movb %r12b,(%r8)
+        # incq %r8
+        # movb $109,(%r8)
+        # incq %r8
 
         print_l: # print ch times
             cmpb $0, %ch
@@ -80,7 +108,8 @@ decode:
     movb $0, (%r8) # ensure termination char
 
     # print the decoded string
-    movq $DECODED, %rdi
+    movq $fmt, %rdi
+    movq $DECODED, %rsi
     movq $0, %rax
     call printf
 

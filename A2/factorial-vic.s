@@ -57,7 +57,7 @@ factorial:
     movq %rsp, %rbp
 
     # supply stack arguments and call
-    sub $8, %rsp    # for stack alignmenta advance stack by 8
+    sub $8, %rsp    # for stack alignment advance stack by 8
     pushq $2        # nc
     pushq $1        # n1
     pushq %rdi      # nf
@@ -93,6 +93,7 @@ _factorial:
     # %rax is n3 now
 
     # supply next arguments
+    sub $8, %rsp    # for stack alignment advance stack by 8
     pushq nc(%rbp)  # nc
     incq (%rsp)     # increment nc
     pushq %rax      # n1
