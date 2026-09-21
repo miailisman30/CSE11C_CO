@@ -2,6 +2,7 @@
 .section .rodata
 fmt_decoded: .asciz "%s"
 fmt_csi: .asciz "\x1B[38;5;%d;48;5;%dm"
+fmt_eff_csi: .asciz "\x1B[%dm"
 
 .text
 .include "final.s"
@@ -13,7 +14,6 @@ next_block = 2
 print_times = 1
 character = 0
 
-message = -8
 decode:
     pushq %rbp
     movq %rsp, %rbp
@@ -28,7 +28,7 @@ decode:
     movq %rdi, %r15     # original address of encoded message
 
 # allocate heap memory for decoded message
-    movq $3276800, %rdi   # amount to request
+    movq $32768, %rdi   # amount to request
     call malloc         # %RAX is heap buffer now
 
     movq %rax, %r12     # decoded buffer pointer
@@ -39,12 +39,70 @@ decode:
 # arguments for sprintf to add ansi escape sequence
         movzbq background(%r14), %rcx     # parameter %d 2: background
         movzbq foreground(%r14), %rdx     # parameter %d 1: foreground
-        movq $fmt_csi, %rsi             # fmt string
-        movq %r13, %rdi                 # current buffer pointer
-        
-        call sprintf                # rax is amount written
 
-        addq %rax, %r13              # increment buffer
+# if equal then write special effect csi
+        cmpq %rcx, %rdx
+        jne bgfg
+        # special effects
+            cmpq $0, %rcx
+            je reset
+            cmpq $26, %rcx
+            je stop_blink
+            cmpq $42, %rcx
+            je bold
+            cmpq $66, %rcx
+            je faint
+            cmpq $105, %rcx
+            je conceal
+            cmpq $153, %rcx
+            je reveal
+            cmpq $182, %rcx
+            je blink
+
+            reset:
+                movq $0, %rdx
+                jmp special_eff
+            stop_blink:
+                movq $25, %rdx
+                jmp special_eff
+            bold:
+                movq $1, %rdx
+                jmp special_eff
+            faint:
+                movq $2, %rdx
+                jmp special_eff
+            conceal:
+                movq $8, %rdx
+                jmp special_eff
+            reveal:
+                movq $28, %rdx
+                jmp special_eff
+            blink:
+                movq $5, %rdx
+                jmp special_eff
+
+            special_eff:
+
+            movq $fmt_eff_csi, %rsi             # fmt string
+            movq %r13, %rdi                 # current buffer pointer
+        
+            call sprintf                # rax is amount written
+
+            addq %rax, %r13              # increment buffer
+
+            jmp e_bgfg # dont change bgfg
+        bgfg:
+
+        # bg/fg change
+            movq $fmt_csi, %rsi             # fmt string
+            movq %r13, %rdi                 # current buffer pointer
+        
+            call sprintf                # rax is amount written
+
+            addq %rax, %r13              # increment buffer
+        e_bgfg:
+
+
 
 
 # "decoding" the characters in the block
