@@ -6,7 +6,7 @@ fmt_eff_csi: .asciz "\x1B[%dm"
 fmt_test: .asciz "\x1B[3%d;4%dm"
 
 .text
-.include "abc_sorted.s"
+.include "final.s"
 
 .global main
 
@@ -38,7 +38,7 @@ decode:
     movq %rdi, %r15     # original address of encoded message
 
 # allocate heap memory for decoded message
-    movq $3276, %rdi   # amount to request
+    movq $32768, %rdi   # amount to request
     call malloc         # %RAX is heap buffer now
 
     movq %rax, %r12     # decoded buffer pointer
