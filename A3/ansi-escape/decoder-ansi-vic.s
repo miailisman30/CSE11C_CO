@@ -3,9 +3,11 @@
 fmt_decoded: .asciz "%s"
 fmt_csi: .asciz "\x1B[38;5;%d;48;5;%dm"
 fmt_eff_csi: .asciz "\x1B[%dm"
+fmt_test: .asciz "\x1B[3%d;4%dm"
 
 .text
-.include "final.s"
+.include "abc_sorted.s"
+
 .global main
 
 foreground = 6
@@ -13,6 +15,14 @@ background = 7
 next_block = 2
 print_times = 1
 character = 0
+
+# effect marker values if (fg == bg) 
+stop_blink_code = 26
+bold_code = 42
+faint_code = 66
+conceal_code = 105
+reveal_code = 153
+blink_code = 182
 
 decode:
     pushq %rbp
@@ -28,7 +38,7 @@ decode:
     movq %rdi, %r15     # original address of encoded message
 
 # allocate heap memory for decoded message
-    movq $32768, %rdi   # amount to request
+    movq $3276, %rdi   # amount to request
     call malloc         # %RAX is heap buffer now
 
     movq %rax, %r12     # decoded buffer pointer
@@ -43,20 +53,22 @@ decode:
 # if equal then write special effect csi
         cmpq %rcx, %rdx
         jne bgfg
+
+
         # special effects
             cmpq $0, %rcx
             je reset
-            cmpq $26, %rcx
+            cmpq $stop_blink_code, %rcx
             je stop_blink
-            cmpq $42, %rcx
+            cmpq $bold_code, %rcx
             je bold
-            cmpq $66, %rcx
+            cmpq $faint_code, %rcx
             je faint
-            cmpq $105, %rcx
+            cmpq $conceal_code, %rcx
             je conceal
-            cmpq $153, %rcx
+            cmpq $reveal_code, %rcx
             je reveal
-            cmpq $182, %rcx
+            cmpq $blink_code, %rcx
             je blink
 
             reset:
@@ -91,8 +103,8 @@ decode:
             addq %rax, %r13              # increment buffer
 
             jmp e_bgfg # dont change bgfg
-        bgfg:
 
+        bgfg:
         # bg/fg change
             movq $fmt_csi, %rsi             # fmt string
             movq %r13, %rdi                 # current buffer pointer
@@ -101,9 +113,6 @@ decode:
 
             addq %rax, %r13              # increment buffer
         e_bgfg:
-
-
-
 
 # "decoding" the characters in the block
         movzbq print_times(%r14), %rcx
@@ -136,6 +145,16 @@ decode:
 
         jmp lblock      # loop
     e_lblock:
+
+# testing bullshit
+    #   movb $27, (%r13)
+    #   incq %r13
+    #   movb $'[', (%r13)
+    #   incq %r13
+    #   movq $'0', (%r13)
+    #   incq %r13
+    #   movb $'m', (%r13)
+    #   incq %r13
 
     
 # null terminate and return
