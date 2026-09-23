@@ -1,13 +1,11 @@
 
 .data
 fmt_decoded: .asciz "%s"
-fmt_csi: .asciz "\x1B[38;5;%d;48;5;%dm"
+fmt_csi: .asciz "\x1B[38;5;%dm\x1B[48;5;%dm"
 fmt_eff_csi: .asciz "\x1B[%dm"
-fmt_test: .asciz "\x1B[3%d;4%dm"
 
 .text
 .include "final.s"
-
 .global main
 
 foreground = 6
@@ -15,14 +13,6 @@ background = 7
 next_block = 2
 print_times = 1
 character = 0
-
-# effect marker values if (fg == bg) 
-stop_blink_code = 26
-bold_code = 42
-faint_code = 66
-conceal_code = 105
-reveal_code = 153
-blink_code = 182
 
 decode:
     pushq %rbp
@@ -47,30 +37,27 @@ decode:
 
     lblock:
 # arguments for sprintf to add ansi escape sequence
-        movzbq background(%r14), %rcx       # parameter %d 2: background
-        movzbq foreground(%r14), %rdx       # parameter %d 1: foreground
+        movzbq background(%r14), %rcx     # parameter %d 2: background
+        movzbq foreground(%r14), %rdx     # parameter %d 1: foreground
 
 # if equal then write special effect csi
         cmpq %rcx, %rdx
-        jne bgfg                            # else apply bgfg
-
+        jne bgfg
         # special effects
             cmpq $0, %rcx
             je reset
-            cmpq $stop_blink_code, %rcx
+            cmpq $26, %rcx
             je stop_blink
-            cmpq $bold_code, %rcx
+            cmpq $42, %rcx
             je bold
-            cmpq $faint_code, %rcx
+            cmpq $66, %rcx
             je faint
-            cmpq $conceal_code, %rcx
+            cmpq $105, %rcx
             je conceal
-            cmpq $reveal_code, %rcx
+            cmpq $153, %rcx
             je reveal
-            cmpq $blink_code, %rcx
+            cmpq $182, %rcx
             je blink
-            
-            jmp e_bgfg
 
             reset:
                 movq $0, %rdx
@@ -96,34 +83,37 @@ decode:
 
             special_eff:
 
-            movq $fmt_eff_csi, %rsi         # fmt string
+            movq $fmt_eff_csi, %rsi             # fmt string
             movq %r13, %rdi                 # current buffer pointer
         
-            call sprintf                    # rax is amount written
+            call sprintf                # rax is amount written
 
-            addq %rax, %r13                 # increment buffer
+            addq %rax, %r13              # increment buffer
 
             jmp e_bgfg # dont change bgfg
-
         bgfg:
-# bg/fg change
+
+        # bg/fg change
             movq $fmt_csi, %rsi             # fmt string
             movq %r13, %rdi                 # current buffer pointer
         
-            call sprintf                    # rax is amount written
+            call sprintf                # rax is amount written
 
-            addq %rax, %r13                 # increment buffer
+            addq %rax, %r13              # increment buffer
         e_bgfg:
 
+
+
+
 # "decoding" the characters in the block
-        movzbq print_times(%r14), %rcx      # movzbq copies only one byte into the 8 byte register
+        movzbq print_times(%r14), %rcx
         dec_block:
 # stop printing character if no more
             cmpq $0, %rcx
             jle e_dec_block
 
 # print character
-            movzbq character(%r14), %rdx    # movzbq copies only one byte into the 8 byte register
+            movzbq character(%r14), %rdx
             movb %dl, (%r13)                # write to buffer
             incq %r13                       # increment buffer pointer
 
@@ -132,10 +122,9 @@ decode:
             jmp dec_block
         e_dec_block:
 
-# go to next block
-        movl next_block(%r14), %ecx         # move with movl so only 4 bytes get copied into the 4 byte register
-                                            # using ECX automatically zeroes the leading bytes from the RCX register
-                                            # and it copies it as little endian as expected
+
+        #movq next_block(%r14), %rcx # place next block offset in rcx
+        movl next_block(%r14), %ecx
 # exit loop if arrived on block 0 again
         cmpq $0, %rcx
         je e_lblock
@@ -149,19 +138,10 @@ decode:
     e_lblock:
 
     
-# null terminate and DONT return
+# null terminate and return
     movq $0, (%r13)
-    # movq %r12, %rax
+    movq %r12, %rax
 
-# print result HERE ACTUALLY
-    movq $fmt_decoded, %rdi
-    movq %r12, %rsi
-    movq $0, %rax
-    call printf
-
-# free
-    movq %r12, %rdi
-    call free
 
 # return callee saved registers
     popq %r15
@@ -173,8 +153,6 @@ decode:
     popq %rbp
     ret
 
-
-# main is not considered in submission
 main:
     pushq %rbp
     movq %rsp, %rbp
@@ -182,10 +160,20 @@ main:
     subq $8, %rsp
     pushq %rbx
 
-# call decode here
+
     movq $MESSAGE, %rdi
     movq $0, %rax
     call decode
+    movq %rax, %rbx # place into rbx
+# print result
+    movq $fmt_decoded, %rdi
+    movq %rbx, %rsi
+    movq $0, %rax
+    call printf
+
+# free
+    movq %rbx, %rdi
+    call free
 
 
     addq $8, %rsp
