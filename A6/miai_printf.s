@@ -3,17 +3,16 @@
 .section .rodata
 .Lnull_str:
     .asciz "(null)"
-.Linf_str:
-    .asciz "inf"
-.Lnan_str:
-    .asciz "nan"
 .Lminus_char:
-    .byte 45
+    .byte '-'
 .Ldot_char:
-    .byte 46
+    .byte '.'
 .text
 .type my_printf, @function
 .type miai_printf, @function
+# SysV: RDI = format; RSI, RDX, RCX, R8, R9 = first five values.
+# Further values occupy 8-byte stack slots. FP8 is passed as integer bits.
+# Returns the formatted byte count (assuming successful writes).
 my_printf:
 miai_printf:
     pushq %rbp
@@ -23,58 +22,83 @@ miai_printf:
     pushq %r13
     pushq %r14
     pushq %r15
+    # 0..39: saved arguments; 40..42: fraction digits;
+    # 48: signed magnitude / float integer part; 56: float fraction.
+    # RSP is 16-byte aligned before every call.
     subq $72, %rsp
-    movq %rsi, 32(%rsp)
-    movq %rdx, 40(%rsp)
-    movq %rcx, 48(%rsp)
-    movq %r8, 56(%rsp)
-    movq %r9, 64(%rsp)
-    leaq 32(%rsp), %r13      # save base == buffer end
-    movq %rdi, %rbx          # fmt
-    xorq %r12, %r12          # count
-    xorq %r15, %r15          # gp index
-    leaq 16(%rbp), %r14      # stack args
+    movq %rsi, 0(%rsp)
+    movq %rdx, 8(%rsp)
+    movq %rcx, 16(%rsp)
+    movq %r8, 24(%rsp)
+    movq %r9, 32(%rsp)
+    movq %rsp, %r13          # saved register arguments
+    movq %rdi, %rbx          # format cursor
+    xorq %r12, %r12          # byte count
+    xorq %r15, %r15          # argument index
+    leaq 16(%rbp), %r14      # next stack argument
 .Lloop:
     movb (%rbx), %al
     testb %al, %al
     jz .Ldone
-    cmpb $0x25, %al
+    cmpb $'%', %al
     je .Lpercent
-    movq %rbx, %rsi
+    movq %rbx, %rdi
     call write_one
+    addq %rax, %r12
     incq %rbx
     jmp .Lloop
 .Lpercent:
     movb 1(%rbx), %al
     testb %al, %al
     jz .Ltrailing
-    cmpb $0x25, %al
+    cmpb $'%', %al
     je .Lescape
-    cmpb $0x73, %al
-    je .Lperc_s
-    cmpb $0x75, %al
-    je .Lperc_u
-    cmpb $0x64, %al
-    je .Lperc_d
-    cmpb $0x66, %al
-    je .Lperc_f
-    movq %rbx, %rsi
-    movq $2, %rdx
+    cmpb $'s', %al
+    je .Largument
+    cmpb $'u', %al
+    je .Largument
+    cmpb $'d', %al
+    je .Largument
+    cmpb $'f', %al
+    je .Largument
+    # Unknown specifiers are printed literally and consume no argument.
+    movq %rbx, %rdi
+    movq $2, %rsi
     call write_mem
+    addq %rax, %r12
     addq $2, %rbx
     jmp .Lloop
 .Lescape:
-    movq %rbx, %rsi
+    movq %rbx, %rdi
     call write_one
+    addq %rax, %r12
     addq $2, %rbx
     jmp .Lloop
 .Ltrailing:
-    movq %rbx, %rsi
+    movq %rbx, %rdi
     call write_one
+    addq %rax, %r12
     jmp .Ldone
+.Largument:
+    # Fetch once for all recognized specifiers; AL still holds the letter.
+    cmpq $5, %r15
+    jb .Lregister_arg
+    movq (%r14), %rdi
+    addq $8, %r14
+    jmp .Ldispatch
+.Lregister_arg:
+    movq (%r13,%r15,8), %rdi
+.Ldispatch:
+    incq %r15
+    cmpb $'s', %al
+    je .Lperc_s
+    cmpb $'u', %al
+    je .Lperc_u
+    cmpb $'d', %al
+    je .Lperc_d
+    jmp .Lperc_f
 .Lperc_s:
-    call fetch_arg
-    movq %rax, %r10
+    movq %rdi, %r10
     testq %r10, %r10
     jnz .Ls_notnull
     leaq .Lnull_str(%rip), %r10
@@ -94,44 +118,35 @@ miai_printf:
 .Ls_gotlen:
     testq %rcx, %rcx
     jz .Ls_empty
-    movq %r10, %rsi
-    movq %rcx, %rdx
+    movq %r10, %rdi
+    movq %rcx, %rsi
     call write_mem
+    addq %rax, %r12
 
 .Ls_empty:
     addq $2, %rbx
     jmp .Lloop
 .Lperc_u:
-    call fetch_arg
     call print_u64
+    addq %rax, %r12
     addq $2, %rbx
     jmp .Lloop
 .Lperc_d:
-    call fetch_arg
-    movq %rax, %r10
-    shrq $32, %r10
-    testq %r10, %r10
-    jnz .Ld_keep
-    testl %eax, %eax
-    jns .Ld_keep
-    movslq %eax, %rax
-
-.Ld_keep:
-    testq %rax, %rax
-    jns .Ld_pos
-    movq %rax, %r10
-    leaq .Lminus_char(%rip), %rsi
+    # The argument is always signed 64-bit, never a promoted 32-bit int.
+    testq %rdi, %rdi
+    jns .Lperc_u
+    negq %rdi               # INT64_MIN becomes unsigned magnitude 2^63
+    movq %rdi, 48(%rsp)
+    leaq .Lminus_char(%rip), %rdi
     call write_one
-    movq %r10, %rax
-    negq %rax
-
-.Ld_pos:
-    call print_u64
-    addq $2, %rbx
-    jmp .Lloop
+    addq %rax, %r12
+    movq 48(%rsp), %rdi
+    jmp .Lperc_u
 .Lperc_f:
-    call fetch_arg
-    movzbl %al, %r10d
+    # CO-FP8E4M3FNAN: ALL exponents (0..15) are finite and normalized.
+    # value = (-1)^sign * (8 + mantissa) * 2^(exponent - 10)
+    # magnitude * 1000 = (8 + mantissa) * 125 * 2^(exponent - 7)
+    movzbl %dil, %r10d
     movl %r10d, %r9d
     shrl $7, %r9d
     movl %r10d, %ecx
@@ -139,34 +154,13 @@ miai_printf:
     andl $15, %ecx
     movl %r10d, %edx
     andl $7, %edx
-    cmpl $15, %ecx
-    je .Lf_exp15
-    testl %ecx, %ecx
-    jnz .Lf_norm
-    testl %edx, %edx
-    jz .Lf_zero
-    movq %rdx, %rax
-    movq $125, %rcx
-    imulq %rcx, %rax
-    addq $32, %rax
-    movq $64, %rcx
-    xorl %edx, %edx
-    divq %rcx
-    movq %rax, %r10
-    jmp .Lf_have_thou
-
-.Lf_zero:
-    xorq %r10, %r10
-    jmp .Lf_have_thou
-
-.Lf_norm:
     movl %ecx, %r11d
     movq %rdx, %rax
     addq $8, %rax
-    movq $125, %rcx
-    imulq %rcx, %rax
+    imulq $125, %rax
     cmpl $7, %r11d
-    jae .Lf_ge7
+    jae .Lf_scale_up
+    # Divide by 2^(7-exponent), adding half the divisor to round up ties.
     movl $7, %ecx
     subl %r11d, %ecx
     movq $1, %r11
@@ -175,64 +169,34 @@ miai_printf:
     shrq $1, %rcx
     addq %rcx, %rax
     xorl %edx, %edx
-    movq %r11, %rcx
-    divq %rcx
-    movq %rax, %r10
-    jmp .Lf_have_thou
+    divq %r11
+    jmp .Lf_split_decimal
 
-.Lf_ge7:
+.Lf_scale_up:
     movl %r11d, %ecx
     subl $7, %ecx
     shlq %cl, %rax
-    movq %rax, %r10
-    jmp .Lf_have_thou
 
-.Lf_exp15:
-    testl %edx, %edx
-    jz .Lf_is_inf
-    testl %r9d, %r9d
-    jz .Lf_nan_pos
-    leaq .Lminus_char(%rip), %rsi
-    call write_one
-
-.Lf_nan_pos:
-    leaq .Lnan_str(%rip), %rsi
-    movq $3, %rdx
-    call write_mem
-    addq $2, %rbx
-    jmp .Lloop
-
-.Lf_is_inf:
-    testl %r9d, %r9d
-    jz .Lf_inf_pos
-    leaq .Lminus_char(%rip), %rsi
-    call write_one
-
-.Lf_inf_pos:
-    leaq .Linf_str(%rip), %rsi
-    movq $3, %rdx
-    call write_mem
-    addq $2, %rbx
-    jmp .Lloop
-
-.Lf_have_thou:
-    movq %r10, %rax
+.Lf_split_decimal:
     movq $1000, %rcx
     xorl %edx, %edx
     divq %rcx
-    movq %rax, %r10
-    movq %rdx, %r8
+    movq %rax, 48(%rsp)
+    movq %rdx, 56(%rsp)
     testl %r9d, %r9d
     jz .Lf_no_sign
-    leaq .Lminus_char(%rip), %rsi
+    leaq .Lminus_char(%rip), %rdi
     call write_one
+    addq %rax, %r12
 
 .Lf_no_sign:
-    movq %r10, %rax
+    movq 48(%rsp), %rdi
     call print_u64
-    leaq .Ldot_char(%rip), %rsi
+    addq %rax, %r12
+    leaq .Ldot_char(%rip), %rdi
     call write_one
-    movq %r8, %rax
+    addq %rax, %r12
+    movq 56(%rsp), %rax
     movq $100, %rcx
     xorl %edx, %edx
     divq %rcx
@@ -241,15 +205,16 @@ miai_printf:
     movq $10, %rcx
     xorl %edx, %edx
     divq %rcx
-    addq $48, %r10
-    addq $48, %rax
-    addq $48, %rdx
-    movb %r10b, -32(%r13)
-    movb %al, -31(%r13)
-    movb %dl, -30(%r13)
-    leaq -32(%r13), %rsi
-    movq $3, %rdx
+    addq $'0', %r10
+    addq $'0', %rax
+    addq $'0', %rdx
+    movb %r10b, 40(%rsp)
+    movb %al, 41(%rsp)
+    movb %dl, 42(%rsp)
+    leaq 40(%rsp), %rdi
+    movq $3, %rsi
     call write_mem
+    addq %rax, %r12
     addq $2, %rbx
     jmp .Lloop
 .Ldone:
@@ -262,68 +227,75 @@ miai_printf:
     popq %rbx
     popq %rbp
     ret
-# ---- subroutines (only touch caller-saved + R12/R14/R15 state) ----
-fetch_arg:
-    cmpq $5, %r15
-    jae 1f
-    movq (%r13,%r15,8), %rax
-    incq %r15
-    ret
-1:
-    movq (%r14), %rax
-    addq $8, %r14
-    incq %r15
-    ret
-write_mem:                  # RSI=ptr RDX=len -> single write, R12+=len
-    pushq %rdx
+# ---- SysV-compliant helpers (args in RDI/RSI/RDX, only caller-saved touched) ----
+.type write_mem, @function
+write_mem:                    # RDI=ptr RSI=len -> RAX=len
+    pushq %rsi
+    movq %rsi, %rdx
+    movq %rdi, %rsi
     movq $1, %rax
     movq $1, %rdi
     syscall
-    popq %rdx
-    addq %rdx, %r12
+    popq %rax
     ret
-write_one:                  # RSI=ptr -> 1 byte, R12++
-    movq $1, %rax
-    movq $1, %rdi
-    movq $1, %rdx
-    syscall
-    incq %r12
-    ret
-print_u64:                  # RAX=value -> decimal, uses buffer [R13-32,R13)
-    pushq %r8
-    pushq %r9
-    pushq %r10
-    pushq %r11
-    movq %r13, %r10
-    movq %r10, %r11
-    testq %rax, %rax
-    jnz 1f
-    decq %r11
-    movb $48, (%r11)
-    jmp 2f
-1:
+.type write_one, @function
+write_one:                    # RDI=ptr -> RAX=1
+    movq $1, %rsi
+    jmp write_mem             # tail call; reuse the caller's return address
+.type print_u64, @function
+print_u64:                    # RDI=value -> RAX=len (writes decimal)
+    subq $40, %rsp
+    movq %rdi, %rax
+    leaq 32(%rsp), %r8
+    movq %r8, %r9
     movq $10, %rcx
-3:
-    testq %rax, %rax
-    jz 2f
+.Ldecimal_digit:
+    # Build backwards; run at least once so zero produces a digit too.
     xorl %edx, %edx
     divq %rcx
-    addb $48, %dl
-    decq %r11
-    movb %dl, (%r11)
-    jmp 3b
-2:
-    movq %r11, %rsi
-    movq %r10, %rdx
-    subq %r11, %rdx
-    pushq %rdx
-    movq $1, %rax
-    movq $1, %rdi
-    syscall
-    popq %rdx
-    addq %rdx, %r12
-    popq %r11
-    popq %r10
-    popq %r9
-    popq %r8
+    addb $'0', %dl
+    decq %r9
+    movb %dl, (%r9)
+    testq %rax, %rax
+    jnz .Ldecimal_digit
+    movq %r9, %rdi
+    movq %r8, %rsi
+    subq %r9, %rsi
+    call write_mem
+    addq $40, %rsp
     ret
+
+# Standalone example for ld --entry main. No C runtime is involved.
+.section .rodata
+.Lexample_format:
+    .asciz "%s: %u %d | %f %f %f %f | %% %q\n"
+.Lexample_name:
+    .asciz "Piet"
+.text
+.globl main
+.type main, @function
+main:
+    pushq %rbp
+    movq %rsp, %rbp
+    # Process entry starts aligned; the prologue pushed 8 bytes.
+    andq $-16, %rsp
+
+    # Seven values: five in registers, then two on the stack in reverse order.
+    pushq $0x24              # 0.188 (rounded from 0.1875)
+    pushq $0xff              # -480.000
+    leaq .Lexample_format(%rip), %rdi
+    leaq .Lexample_name(%rip), %rsi
+    movq $42, %rdx
+    movq $-42, %rcx
+    movq $0x00, %r8          # 0.008 (exponent 0 is normalized)
+    movq $0x78, %r9          # 256.000 (exponent 15 is finite)
+    xorl %eax, %eax          # no vector-register arguments
+    call my_printf
+    addq $16, %rsp
+
+    movq $60, %rax           # exit(0); process entry cannot return with ret
+    xorl %edi, %edi
+    syscall
+
+# Linker metadata: this program does not require an executable stack.
+.section .note.GNU-stack,"",@progbits
