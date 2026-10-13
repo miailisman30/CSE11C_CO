@@ -51,7 +51,7 @@ bracket_type:
 # so must do a special case that "if code is 41 then check for 40"
 
 .text
-.include "basic.s"
+.include "basicInvalid.s"
 .global main
 
 # input
@@ -75,7 +75,6 @@ _check_validity_sequence:
 # check if current character is a parenthesis
         movzbq (%rdi), %rdx             # read the character byte into rdx (forced because of pushq only)
         incq %rdi                       # move to next char 
-
 # use the lookup table to check what the character is
 # 1 = opening 
 # 2 = closing
@@ -114,11 +113,28 @@ _check_validity_sequence:
                 addq $8, %rsp   # delete the open paren because we found the matching pair
                 jmp loop        # loop
             bad:
-# we got a bad sequence! return 1
+# need to drain to null terminator
+                drain:
+                    cmpb $0, (%rdi)
+                    je e_drain                      # move to next char
+                    incq %rdi
+                    jmp drain
+                e_drain:
+                incq %rdi
+                # we got a bad sequence! return 1
                 movq $1, %rax
                 jmp e_loop      # exit loop (optional jump)
     e_loop:
 
+# check for leftover open parenthesis
+    cmp %rbp, %rsp
+    jne leftover
+    jmp e_leftover
+    leftover:
+        # we got a bad sequence! return 1
+        movq $1, %rax
+    e_leftover:
+    
 	# epilogue
 	movq	%rbp, %rsp		# clear local variables from stack
 	popq	%rbp			# restore base pointer location 
@@ -144,6 +160,8 @@ check_validity:
 
 # save callee saved
     pushq %rbx
+    subq $8, %rsp
+
     movq $0, %rbx   # init with 0
 
     seq_loop:
@@ -151,7 +169,7 @@ check_validity:
         call _check_validity_sequence
 # this call advances the iterator and returns 1 if there was an error 
         addq %rax, %rbx     # increment by one if worng sequence
-        cmpq $0, (%rdi)     # if character right after sequence is another null char then we reached eof 
+        cmpb $0, (%rdi)     # if character right after sequence is another null char then we reached eof 
         je e_seq_loop
         jmp seq_loop
     e_seq_loop:
@@ -159,6 +177,7 @@ check_validity:
     movq %rbx, %rax         # return
 
 # return callee saved
+    addq $8, %rsp
     popq %rbx
 
 	movq    %rbp, %rsp  	# clear local variables from stack
