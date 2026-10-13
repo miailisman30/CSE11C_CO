@@ -264,6 +264,10 @@ print_u64:                    # RDI=value -> RAX=len (writes decimal)
 
 
 .section .rodata
+.Lexample_format:
+    .asciz "%s: %u %d | %f %f %f %f | %% %q\n"
+.Lexample_name:
+    .asciz "Piet"
 .text
 .globl main
 .type main, @function
