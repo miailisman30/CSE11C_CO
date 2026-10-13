@@ -10,9 +10,9 @@
 .text
 .type my_printf, @function
 .type miai_printf, @function
-# SysV: RDI = format; RSI, RDX, RCX, R8, R9 = first five values.
-# Further values occupy 8-byte stack slots. FP8 is passed as integer bits.
-# Returns the formatted byte count (assuming successful writes).
+# RDI = format; RSI, RDX, RCX, R8, R9 = first five values.
+# other values occupy 8-byte stack slots and i pass FP8 as integer bits.
+# Returns the formatted byte count
 my_printf:
 miai_printf:
     pushq %rbp
@@ -22,9 +22,7 @@ miai_printf:
     pushq %r13
     pushq %r14
     pushq %r15
-    # 0..39: saved arguments; 40..42: fraction digits;
-    # 48: signed magnitude / float integer part; 56: float fraction.
-    # RSP is 16-byte aligned before every call.
+    # we allign RSP before every call.
     subq $72, %rsp
     movq %rsi, 0(%rsp)
     movq %rdx, 8(%rsp)
@@ -61,7 +59,7 @@ miai_printf:
     je .Largument
     cmpb $'f', %al
     je .Largument
-    # Unknown specifiers are printed literally and consume no argument.
+    # unknown specifiers are printed literally and consume no argument.
     movq %rbx, %rdi
     movq $2, %rsi
     call write_mem
@@ -80,7 +78,7 @@ miai_printf:
     addq %rax, %r12
     jmp .Ldone
 .Largument:
-    # Fetch once for all recognized specifiers; AL still holds the letter.
+    # recognized specifiers; AL still holds the letter.
     cmpq $5, %r15
     jb .Lregister_arg
     movq (%r14), %rdi
@@ -132,7 +130,7 @@ miai_printf:
     addq $2, %rbx
     jmp .Lloop
 .Lperc_d:
-    # The argument is always signed 64-bit, never a promoted 32-bit int.
+    # always signed 64-bit
     testq %rdi, %rdi
     jns .Lperc_u
     negq %rdi               # INT64_MIN becomes unsigned magnitude 2^63
@@ -143,7 +141,6 @@ miai_printf:
     movq 48(%rsp), %rdi
     jmp .Lperc_u
 .Lperc_f:
-    # CO-FP8E4M3FNAN: ALL exponents (0..15) are finite and normalized.
     # value = (-1)^sign * (8 + mantissa) * 2^(exponent - 10)
     # magnitude * 1000 = (8 + mantissa) * 125 * 2^(exponent - 7)
     movzbl %dil, %r10d
@@ -160,7 +157,7 @@ miai_printf:
     imulq $125, %rax
     cmpl $7, %r11d
     jae .Lf_scale_up
-    # Divide by 2^(7-exponent), adding half the divisor to round up ties.
+    # we divide by 2^(7-exponent), adding half the divisor to round up ties.
     movl $7, %ecx
     subl %r11d, %ecx
     movq $1, %r11
@@ -227,7 +224,7 @@ miai_printf:
     popq %rbx
     popq %rbp
     ret
-# ---- SysV-compliant helpers (args in RDI/RSI/RDX, only caller-saved touched) ----
+# only caller-saved touched
 .type write_mem, @function
 write_mem:                    # RDI=ptr RSI=len -> RAX=len
     pushq %rsi
@@ -241,7 +238,7 @@ write_mem:                    # RDI=ptr RSI=len -> RAX=len
 .type write_one, @function
 write_one:                    # RDI=ptr -> RAX=1
     movq $1, %rsi
-    jmp write_mem             # tail call; reuse the caller's return address
+    jmp write_mem             # reuse the caller's return address
 .type print_u64, @function
 print_u64:                    # RDI=value -> RAX=len (writes decimal)
     subq $40, %rsp
@@ -250,7 +247,7 @@ print_u64:                    # RDI=value -> RAX=len (writes decimal)
     movq %r8, %r9
     movq $10, %rcx
 .Ldecimal_digit:
-    # Build backwards; run at least once so zero produces a digit too.
+    # i build backwards and run at least once so 0 is a digit too
     xorl %edx, %edx
     divq %rcx
     addb $'0', %dl
@@ -265,30 +262,26 @@ print_u64:                    # RDI=value -> RAX=len (writes decimal)
     addq $40, %rsp
     ret
 
-# Standalone example for ld --entry main. No C runtime is involved.
+
 .section .rodata
-.Lexample_format:
-    .asciz "%s: %u %d | %f %f %f %f | %% %q\n"
-.Lexample_name:
-    .asciz "Piet"
 .text
 .globl main
 .type main, @function
 main:
     pushq %rbp
     movq %rsp, %rbp
-    # Process entry starts aligned; the prologue pushed 8 bytes.
+    # allign stack
     andq $-16, %rsp
 
     # Seven values: five in registers, then two on the stack in reverse order.
-    pushq $0x24              # 0.188 (rounded from 0.1875)
-    pushq $0xff              # -480.000
+    pushq $0x24              # 0.188 (need to keep this in mind)
+    pushq $0xff              # -480.000 (this too)
     leaq .Lexample_format(%rip), %rdi
     leaq .Lexample_name(%rip), %rsi
     movq $42, %rdx
     movq $-42, %rcx
-    movq $0x00, %r8          # 0.008 (exponent 0 is normalized)
-    movq $0x78, %r9          # 256.000 (exponent 15 is finite)
+    movq $0x00, %r8          # 0.008
+    movq $0x78, %r9          # 256.000
     xorl %eax, %eax          # no vector-register arguments
     call my_printf
     addq $16, %rsp
@@ -297,5 +290,5 @@ main:
     xorl %edi, %edi
     syscall
 
-# Linker metadata: this program does not require an executable stack.
+# this program does not require an executable stack as said in lab manual
 .section .note.GNU-stack,"",@progbits
